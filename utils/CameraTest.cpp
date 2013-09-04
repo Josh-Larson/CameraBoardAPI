@@ -2,7 +2,7 @@
 #include <sstream>
 #include <string>
 #include <stdio.h>
-#include "../CameraBoard.h"
+#include "CameraBoard.h"
 using namespace std;
 
 CameraBoard cameraBoard;
