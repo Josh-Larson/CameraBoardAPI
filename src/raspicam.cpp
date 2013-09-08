@@ -100,6 +100,9 @@ int RaspiCam::getContrast() {
 int RaspiCam::getSaturation() {
     return       _impl->  getSaturation   ();
 }
+CAMERA_BOARD_ENCODING RaspiCam::getEncoding() {
+	return        impl->getEncoding();
+}
 CAMERA_BOARD_EXPOSURE RaspiCam::getExposure() {
     return        _impl->getExposure ();
 }
