@@ -38,6 +38,7 @@ typedef struct {
 	MMAL_POOL_T * encoderPool;
 	imageTakenCallback imageCallback;
 	unsigned char * data;
+	unsigned int bufferPosition;
 	unsigned int startingOffset;
 	unsigned int offset;
 	unsigned int length;
@@ -53,37 +54,29 @@ static void control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 
 static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 	CAMERA_BOARD_USERDATA *userdata = (CAMERA_BOARD_USERDATA*)port->userdata;
-	/*
-	 * Before doing anything with the data, you first must lock the memory like this:
-	** mmal_buffer_header_mem_lock(buffer);
-	 * and unlock you use this command:
-	** mmal_buffer_header_mem_unlock(buffer);
-	 * All data is stored in the ->data field, and the length is stored in the ->length field
-	 * To detect the end of the stream or an error, you can run a command like this:
-	** if (buffer->flags & (MMAL_BUFFER_HEADER_FLAG_FRAME_END | MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED))
-	 * After using the buffer, you *must* release it:
-	** mmal_buffer_header_release(buffer);
-	 * Another thing, if the port is still enabled send the buffer back to the port using something like this:
-	** if (port->is_enabled) {
-	** MMAL_BUFFER_HEADER_T *new_buffer = mmal_queue_get(pData->pstate->camera_pool->queue);
-	** if (new_buffer) status = mmal_port_send_buffer(port, new_buffer);
-	 */
-	if (userdata == NULL) {
-		
-	} else if (userdata->cameraBoard == NULL) {
+	if (userdata == NULL || userdata->cameraBoard == NULL) {
 		
 	} else {
 		unsigned int flags = buffer->flags;
-		//cout << "Buffer Callback!! YAYYYYYYYY!! Length: " << buffer->length << "\tFlags: " << flags << "\n";
 		mmal_buffer_header_mem_lock(buffer);
-		for (unsigned int i = 0; i < buffer->length; i++, userdata->offset++) {
+		for (unsigned int i = 0; i < buffer->length; i++, userdata->bufferPosition++) {
 			if (userdata->offset >= userdata->length) {
-				// Error! The user provided an array that was too small!
 				cout << userdata->cameraBoard->API_NAME << ": Buffer provided was too small! Failed to copy data into buffer.\n";
 				userdata->cameraBoard = NULL;
 				break;
 			} else {
-				userdata->data[userdata->offset] = buffer->data[i];
+				if (userdata->cameraBoard->getEncoding() == CAMERA_BOARD_ENCODING_RGB) {
+					// Determines if the byte is an RGB value
+					unsigned int stripOffset = userdata->bufferPosition - 42;
+					stripOffset %= userdata->cameraBoard->getWidth() + 2;
+					if (stripOffset < userdata->cameraBoard->getWidth()) {
+						userdata->data[userdata->offset] = buffer->data[i];
+						userdata->offset++;
+					}
+				} else {
+					userdata->data[userdata->offset] = buffer->data[i];
+					userdata->offset++;
+				}
 			}
 		}
 		mmal_buffer_header_mem_unlock(buffer);
@@ -91,14 +84,8 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 		END_FLAG |= MMAL_BUFFER_HEADER_FLAG_FRAME_END;
 		END_FLAG |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
 		END_FLAG &= flags;
-		unsigned int CLEAN_FLAG = 0;
-		CLEAN_FLAG |= MMAL_BUFFER_HEADER_FLAG_EOS;
-		CLEAN_FLAG &= flags;
 		if (END_FLAG != 0) {
 			userdata->imageCallback(userdata->data, userdata->startingOffset, userdata->length - userdata->startingOffset);
-		}
-		if (CLEAN_FLAG != 0) {
-			
 		}
 	}
 	mmal_buffer_header_release(buffer);
@@ -348,6 +335,7 @@ int CameraBoard::startCapture(unsigned char * preallocated_data, unsigned int of
 	userdata->cameraBoard = this;
 	userdata->encoderPool = encoder_pool;
 	userdata->data = preallocated_data;
+	userdata->bufferPosition = 0;
 	userdata->offset = offset;
 	userdata->startingOffset = offset;
 	userdata->length = length;
@@ -497,6 +485,10 @@ int CameraBoard::getSaturation() {
 	return saturation;
 }
 
+CAMERA_BOARD_ENCODING CameraBoard::getEncoding() {
+	return encoding;
+}
+
 CAMERA_BOARD_EXPOSURE CameraBoard::getExposure() {
 	return exposure;
 }
@@ -596,6 +588,7 @@ MMAL_FOURCC_T CameraBoard::convertEncoding(CAMERA_BOARD_ENCODING encoding) {
 		case CAMERA_BOARD_ENCODING_BMP: return MMAL_ENCODING_BMP;
 		case CAMERA_BOARD_ENCODING_GIF: return MMAL_ENCODING_GIF;
 		case CAMERA_BOARD_ENCODING_PNG: return MMAL_ENCODING_PNG;
+		case CAMERA_BOARD_ENCODING_RGB: return MMAL_ENCODING_BMP;
 		default: return -1;
 	}
 }

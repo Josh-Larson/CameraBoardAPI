@@ -122,6 +122,7 @@ class CameraBoard {
 	int getSharpness();
 	int getContrast();
 	int getSaturation();
+	CAMERA_BOARD_ENCODING getEncoding();
 	CAMERA_BOARD_EXPOSURE getExposure();
 	CAMERA_BOARD_AWB getAWB();
 	CAMERA_BOARD_IMAGE_EFFECT getImageEffect();

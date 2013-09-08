@@ -2,7 +2,7 @@
 #include "raspicam.h"
 
 RaspiCam::RaspiCam():_impl(new CameraBoard()) {
-
+	
 }
 RaspiCam::~RaspiCam(){
 	delete _impl;
