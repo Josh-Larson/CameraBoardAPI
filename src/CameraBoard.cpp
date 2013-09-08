@@ -38,6 +38,7 @@ typedef struct {
 	MMAL_POOL_T * encoderPool;
 	imageTakenCallback imageCallback;
 	unsigned char * data;
+	unsigned int startingOffset;
 	unsigned int offset;
 	unsigned int length;
 } CAMERA_BOARD_USERDATA;
@@ -45,7 +46,7 @@ typedef struct {
 static void control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 	if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED) {
 	} else {
-		cout << "controlCallback: Received unexpected control callback event! Command: " << buffer->cmd << "\n";
+		// Unexpected control callback event!
 	}
 	mmal_buffer_header_release(buffer);
 }
@@ -75,7 +76,7 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 		unsigned int flags = buffer->flags;
 		//cout << "Buffer Callback!! YAYYYYYYYY!! Length: " << buffer->length << "\tFlags: " << flags << "\n";
 		mmal_buffer_header_mem_lock(buffer);
-		for (int i = 0; i < buffer->length; i++, userdata->offset++) {
+		for (unsigned int i = 0; i < buffer->length; i++, userdata->offset++) {
 			if (userdata->offset >= userdata->length) {
 				// Error! The user provided an array that was too small!
 				cout << userdata->cameraBoard->API_NAME << ": Buffer provided was too small! Failed to copy data into buffer.\n";
@@ -94,7 +95,7 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 		CLEAN_FLAG |= MMAL_BUFFER_HEADER_FLAG_EOS;
 		CLEAN_FLAG &= flags;
 		if (END_FLAG != 0) {
-			userdata->imageCallback(userdata->data, userdata->length);
+			userdata->imageCallback(userdata->data, userdata->startingOffset, userdata->length - userdata->startingOffset);
 		}
 		if (CLEAN_FLAG != 0) {
 			
@@ -348,6 +349,7 @@ int CameraBoard::startCapture(unsigned char * preallocated_data, unsigned int of
 	userdata->encoderPool = encoder_pool;
 	userdata->data = preallocated_data;
 	userdata->offset = offset;
+	userdata->startingOffset = offset;
 	userdata->length = length;
 	userdata->imageCallback = userCallback;
 	if (encoder_output_port->is_enabled) {

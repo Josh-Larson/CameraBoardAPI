@@ -6,46 +6,42 @@
 using namespace std;
 
 RaspiCam cameraBoard;
-unsigned char * combined_data;
 volatile int pictures_taken = 0;
 const int max_pictures = 5;
 
-void onImageTaken(unsigned char *data, unsigned int length) {
+void onImageTaken(unsigned char *data, unsigned int image_offset, unsigned int length) {
 	stringstream ss;
 	ss << "output_image" << pictures_taken << ".bmp";
 	string pTaken;
 	ss >> pTaken;
 	FILE * file = fopen(pTaken.c_str(), "w");
-	fwrite(combined_data, 1, length, file);
+	fwrite(data + image_offset, 1, length, file);
 	fclose(file);
 	cout << "Saved Image\n";
 	pictures_taken++;
 }
 
 int main(int argc, char *argv[]) {
-	int width = 1280;
-	int height = 720;
-	unsigned int length = width*height*4;
-	combined_data = new unsigned char[length];
+	int width = 640;
+	int height = 480;
+	unsigned int length = 62 + width*height*3 + height*2; // Header + Image Data + Padding
 	
 	cout << "Initializing...\n";
 	cameraBoard.setWidth(width);
 	cameraBoard.setHeight(height);
-	cameraBoard.setEncoding(CAMERA_BOARD_ENCODING_JPEG);
-
+	cameraBoard.setEncoding(CAMERA_BOARD_ENCODING_BMP);
 	
 	if (cameraBoard.initialize()) return -1;
-
+	
 	cameraBoard.setImageCallback(onImageTaken);
 	unsigned char * data = new unsigned char[length];
-	int ISO = 128000;
 	while (pictures_taken < max_pictures) {
 		if (cameraBoard.startCapture(data, 0, length)) return -1;
 		const int currentImages = pictures_taken;
 		while (currentImages == pictures_taken)
 			usleep(2000);
 		cameraBoard.stopCapture();
-		usleep(1000);
+		usleep(3000);
 	}
 	return 0;
 }

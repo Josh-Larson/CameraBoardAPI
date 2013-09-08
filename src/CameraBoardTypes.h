@@ -1,6 +1,6 @@
 #ifndef CameraBoardTypes_H
 #define CameraBoardTypes_H
-typedef void (*imageTakenCallback)(unsigned char * data, unsigned int length);
+typedef void (*imageTakenCallback)(unsigned char * data, unsigned int image_offset, unsigned int length);
 
 typedef enum CAMERA_BOARD_EXPOSURE {
 	CAMERA_BOARD_EXPOSURE_OFF,
