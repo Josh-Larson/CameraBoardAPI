@@ -12,11 +12,14 @@ int RaspiCam::initialize() {
     return _impl->initialize();
 }
 
-int RaspiCam::startCapture(unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
-    return _impl->startCapture(preallocated_data,offset,length);
+int RaspiCam::startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
+    return _impl->startCapture(userCallback, preallocated_data,offset,length);
 }
 void RaspiCam::stopCapture() {
     _impl->stopCapture();
+}
+int RaspiCam::takePicture(unsigned char * preallocated_data, unsigned int length) {
+	return _impl->takePicture(preallocated_data, length);
 }
 /*void RaspiCam::bufferCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
     _impl->bufferCallback(port,buffer);
@@ -71,9 +74,6 @@ void RaspiCam::setHorizontalFlip(bool hFlip) {
 }
 void RaspiCam::setVerticalFlip(bool vFlip) {
     _impl->setVerticalFlip(vFlip);
-}
-void RaspiCam::setImageCallback(imageTakenCallback callback) {
-    _impl-> setImageCallback(callback);
 }
 
 unsigned int RaspiCam::getWidth() {

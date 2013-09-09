@@ -60,7 +60,6 @@ class CameraBoard {
 	CAMERA_BOARD_METERING metering;
 	bool horizontalFlip;
 	bool verticalFlip;
-	imageTakenCallback userCallback;
 	
 	MMAL_FOURCC_T convertEncoding(CAMERA_BOARD_ENCODING encoding);
 	MMAL_PARAM_EXPOSUREMETERINGMODE_T convertMetering(CAMERA_BOARD_METERING metering);
@@ -78,6 +77,7 @@ class CameraBoard {
 	void commitImageEffect();
 	void commitMetering();
 	void commitFlips();
+	int startCapture();
 	int createCamera();
 	int createEncoder();
 	void destroyCamera();
@@ -92,8 +92,9 @@ class CameraBoard {
 		setDefaults();
 	}
 	int initialize();
-	int startCapture(unsigned char * preallocated_data, unsigned int offset, unsigned int length);
+	int startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
 	void stopCapture();
+	int takePicture(unsigned char * preallocated_data, unsigned int length);
 	void bufferCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 	void commitParameters();
 	void setWidth(unsigned int width);
@@ -112,7 +113,6 @@ class CameraBoard {
 	void setMetering(CAMERA_BOARD_METERING metering);
 	void setHorizontalFlip(bool hFlip);
 	void setVerticalFlip(bool vFlip);
-	void setImageCallback(imageTakenCallback callback);
 	
 	unsigned int getWidth();
 	unsigned int getHeight();

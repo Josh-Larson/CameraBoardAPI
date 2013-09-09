@@ -31,12 +31,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal/mmal_util.h"
 #include "mmal/mmal_util_params.h"
 #include <iostream>
+#include <semaphore.h>
 using namespace std;
 
 typedef struct {
 	CameraBoard * cameraBoard;
 	MMAL_POOL_T * encoderPool;
 	imageTakenCallback imageCallback;
+	sem_t *mutex;
 	unsigned char * data;
 	unsigned int bufferPosition;
 	unsigned int startingOffset;
@@ -85,7 +87,11 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 		END_FLAG |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
 		END_FLAG &= flags;
 		if (END_FLAG != 0) {
-			userdata->imageCallback(userdata->data, userdata->startingOffset, userdata->length - userdata->startingOffset);
+			if (userdata->mutex == NULL) {
+				userdata->imageCallback(userdata->data, userdata->startingOffset, userdata->length - userdata->startingOffset);
+			} else {
+				sem_post(userdata->mutex);
+			}
 		}
 	}
 	mmal_buffer_header_release(buffer);
@@ -330,21 +336,48 @@ int CameraBoard::initialize() {
 	return 0;
 }
 
-int CameraBoard::startCapture(unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
+int CameraBoard::takePicture(unsigned char * preallocated_data, unsigned int length) {
+	int ret = 0;
+	sem_t mutex;
+	sem_init(&mutex, 0, 0);
 	CAMERA_BOARD_USERDATA * userdata = new CAMERA_BOARD_USERDATA();
 	userdata->cameraBoard = this;
 	userdata->encoderPool = encoder_pool;
+	userdata->mutex = &mutex;
+	userdata->data = preallocated_data;
+	userdata->bufferPosition = 0;
+	userdata->offset = 0;
+	userdata->startingOffset = 0;
+	userdata->length = length;
+	userdata->imageCallback = NULL;
+	encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *) userdata;
+	if ((ret = startCapture()) != 0) return ret;
+	sem_wait(&mutex);
+	sem_destroy(&mutex);
+	stopCapture();
+	return ret;
+}
+
+int CameraBoard::startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
+	CAMERA_BOARD_USERDATA * userdata = new CAMERA_BOARD_USERDATA();
+	userdata->cameraBoard = this;
+	userdata->encoderPool = encoder_pool;
+	userdata->mutex = NULL;
 	userdata->data = preallocated_data;
 	userdata->bufferPosition = 0;
 	userdata->offset = offset;
 	userdata->startingOffset = offset;
 	userdata->length = length;
 	userdata->imageCallback = userCallback;
+	encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *) userdata;
+	startCapture();
+}
+
+int CameraBoard::startCapture() {
 	if (encoder_output_port->is_enabled) {
 		cout << API_NAME << ": Could not enable encoder output port. Try waiting longer before attempting to take another picture.\n";
 		return -1;
 	}
-	encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *) userdata;
 	if (mmal_port_enable(encoder_output_port, buffer_callback) != MMAL_SUCCESS) {
 		cout << API_NAME << ": Could not enable encoder output port.\n";
 		return -1;
@@ -447,10 +480,6 @@ void CameraBoard::setHorizontalFlip(bool hFlip) {
 
 void CameraBoard::setVerticalFlip(bool vFlip) {
 	verticalFlip = vFlip;
-}
-
-void CameraBoard::setImageCallback(imageTakenCallback callback) {
-	userCallback = callback;
 }
 
 unsigned int CameraBoard::getWidth() {

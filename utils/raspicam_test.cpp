@@ -9,14 +9,18 @@ RaspiCam cameraBoard;
 volatile int pictures_taken = 0;
 const int max_pictures = 5;
 
+void saveImage(string filename, unsigned char *data, unsigned int length) {
+	FILE * file = fopen(filename.c_str(), "w");
+	fwrite(data, 1, length, file);
+	fclose(file);
+}
+
 void onImageTaken(unsigned char *data, unsigned int image_offset, unsigned int length) {
 	stringstream ss;
 	ss << "output_image" << pictures_taken << ".bmp";
 	string pTaken;
 	ss >> pTaken;
-	FILE * file = fopen(pTaken.c_str(), "w");
-	fwrite(data + image_offset, 1, length, file);
-	fclose(file);
+	saveImage(pTaken, data + image_offset, length);
 	cout << "Saved Image\n";
 	pictures_taken++;
 }
@@ -33,10 +37,12 @@ int main(int argc, char *argv[]) {
 	
 	if (cameraBoard.initialize()) return -1;
 	
-	cameraBoard.setImageCallback(onImageTaken);
 	unsigned char * data = new unsigned char[length];
+	if (cameraBoard.takePicture(data, length)) return -1;
+	saveImage("output_blocking.bmp", data, length);
+	cout << "Saved Blocking Image\n";
 	while (pictures_taken < max_pictures) {
-		if (cameraBoard.startCapture(data, 0, length)) return -1;
+		if (cameraBoard.startCapture(onImageTaken, data, 0, length)) return -1;
 		const int currentImages = pictures_taken;
 		while (currentImages == pictures_taken)
 			usleep(2000);

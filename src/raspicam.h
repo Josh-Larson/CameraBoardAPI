@@ -13,8 +13,9 @@ public:
 
 
 	int initialize();
-	int startCapture(unsigned char * preallocated_data, unsigned int offset, unsigned int length);
+	int startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
 	void stopCapture();
+	int takePicture(unsigned char * preallocated_data, unsigned int length);
 //	void bufferCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 	void commitParameters();
 	void setWidth(unsigned int width);
