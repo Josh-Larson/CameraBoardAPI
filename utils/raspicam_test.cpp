@@ -28,7 +28,7 @@ void onImageTaken(unsigned char *data, unsigned int image_offset, unsigned int l
 int main(int argc, char *argv[]) {
 	int width = 640;
 	int height = 480;
-	unsigned int length = 62 + width*height*3 + height*2; // Header + Image Data + Padding
+	unsigned int length = 54 + width*height*3; // Header + Image Data
 	
 	cout << "Initializing...\n";
 	cameraBoard.setWidth(width);

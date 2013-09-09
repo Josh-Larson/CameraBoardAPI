@@ -69,9 +69,7 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 			} else {
 				if (userdata->cameraBoard->getEncoding() == CAMERA_BOARD_ENCODING_RGB) {
 					// Determines if the byte is an RGB value
-					unsigned int stripOffset = userdata->bufferPosition - 42;
-					stripOffset %= userdata->cameraBoard->getWidth() + 2;
-					if (stripOffset < userdata->cameraBoard->getWidth()) {
+					if (userdata->bufferPosition >= 54) {
 						userdata->data[userdata->offset] = buffer->data[i];
 						userdata->offset++;
 					}
