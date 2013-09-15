@@ -108,6 +108,7 @@ void CameraBoard::setDefaults() {
 	sharpness = 0;
 	contrast = 0;
 	brightness = 50;
+	quality = 85;
 	saturation = 0;
 	iso = 400;
 	//videoStabilisation = 0;
@@ -120,6 +121,7 @@ void CameraBoard::setDefaults() {
 	//colourEffects.u = 128;
 	//colourEffects.v = 128;
 	rotation = 0;
+	changedSettings = true;
 	horizontalFlip = false;
 	verticalFlip = false;
 	//roi.x = params->roi.y = 0.0;
@@ -127,6 +129,7 @@ void CameraBoard::setDefaults() {
 }
 
 void CameraBoard::commitParameters() {
+	if (!changedSettings) return;
 	commitSharpness();
 	commitContrast();
 	commitBrightness();
@@ -159,6 +162,12 @@ void CameraBoard::commitParameters() {
 	crop.rect.height = (65536 * 1);
 	if (mmal_port_parameter_set(camera->control, &crop.hdr) != MMAL_SUCCESS)
 		cout << API_NAME << ": Failed to set ROI parameter.\n";
+	// Set encoder encoding
+	if (encoder_output_port != NULL) {
+		encoder_output_port->format->encoding = convertEncoding(encoding);
+		mmal_port_format_commit(encoder_output_port);
+	}
+	changedSettings = false;
 }
 
 MMAL_STATUS_T CameraBoard::connectPorts(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection) {
@@ -372,6 +381,10 @@ int CameraBoard::startCapture(imageTakenCallback userCallback, unsigned char * p
 }
 
 int CameraBoard::startCapture() {
+	// If the parameters were changed and this function wasn't called, it will be called here
+	// However if the parameters weren't changed, the function won't do anything - it will return right away
+	commitParameters();
+	
 	if (encoder_output_port->is_enabled) {
 		cout << API_NAME << ": Could not enable encoder output port. Try waiting longer before attempting to take another picture.\n";
 		return -1;
@@ -405,10 +418,12 @@ void CameraBoard::stopCapture() {
 
 void CameraBoard::setWidth(unsigned int width) {
 	this->width = width;
+	changedSettings = true;
 }
 
 void CameraBoard::setHeight(unsigned int height) {
 	this->height = height;
+	changedSettings = true;
 }
 
 void CameraBoard::setCaptureSize(unsigned int width, unsigned int height) {
@@ -420,6 +435,11 @@ void CameraBoard::setBrightness(unsigned int brightness) {
 	if (brightness > 100)
 		brightness = brightness % 100;
 	this->brightness = brightness;
+	changedSettings = true;
+}
+
+void CameraBoard::setQuality(unsigned int quality) {
+	// TODO: Create implementation for this function
 }
 
 void CameraBoard::setRotation(int rotation) {
@@ -428,56 +448,68 @@ void CameraBoard::setRotation(int rotation) {
 	if (rotation >= 360)
 		rotation = rotation % 360;
 	this->rotation = rotation;
+	changedSettings = true;
 }
 
 void CameraBoard::setISO(int iso) {
 	this->iso = iso;
+	changedSettings = true;
 }
 
 void CameraBoard::setSharpness(int sharpness) {
 	if (sharpness < -100) sharpness = -100;
 	if (sharpness > 100) sharpness = 100;
 	this->sharpness = sharpness;
+	changedSettings = true;
 }
 
 void CameraBoard::setContrast(int contrast) {
 	if (contrast < -100) contrast = -100;
 	if (contrast > 100) contrast = 100;
 	this->contrast = contrast;
+	changedSettings = true;
 }
 
 void CameraBoard::setSaturation(int saturation) {
 	if (saturation < -100) saturation = -100;
 	if (saturation > 100) saturation = 100;
 	this->saturation = saturation;
+	changedSettings = true;
 }
 
 void CameraBoard::setEncoding(CAMERA_BOARD_ENCODING encoding) {
 	this->encoding = encoding;
+	changedSettings = true;
 }
 
 void CameraBoard::setExposure(CAMERA_BOARD_EXPOSURE exposure) {
 	this->exposure = exposure;
+	changedSettings = true;
 }
 
 void CameraBoard::setAWB(CAMERA_BOARD_AWB awb) {
 	this->awb = awb;
+	changedSettings = true;
 }
 
 void CameraBoard::setImageEffect(CAMERA_BOARD_IMAGE_EFFECT imageEffect) {
 	this->imageEffect = imageEffect;
+	changedSettings = true;
 }
 
 void CameraBoard::setMetering(CAMERA_BOARD_METERING metering) {
 	this->metering = metering;
+	changedSettings = true;
 }
 
 void CameraBoard::setHorizontalFlip(bool hFlip) {
 	horizontalFlip = hFlip;
+	changedSettings = true;
 }
 
 void CameraBoard::setVerticalFlip(bool vFlip) {
 	verticalFlip = vFlip;
+	changedSettings = true;
 }
 
 unsigned int CameraBoard::getWidth() {
@@ -494,6 +526,10 @@ unsigned int CameraBoard::getBrightness() {
 
 unsigned int CameraBoard::getRotation() {
 	return rotation;
+}
+
+unsigned int CameraBoard::getQuality() {
+	return quality;
 }
 
 int CameraBoard::getISO() {
