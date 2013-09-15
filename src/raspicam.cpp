@@ -39,6 +39,9 @@ void RaspiCam::setCaptureSize(unsigned int width, unsigned int height) {
 void RaspiCam::setBrightness(unsigned int brightness) {
     _impl->setBrightness(brightness);
 }
+void RaspiCam::setQuality(unsigned int quality) {
+	_impl->setQuality(quality);
+}
 void RaspiCam::setRotation(int rotation) {
     _impl-> setRotation(rotation);
 }
@@ -77,48 +80,51 @@ void RaspiCam::setVerticalFlip(bool vFlip) {
 }
 
 unsigned int RaspiCam::getWidth() {
-    return   _impl->getWidth();
+    return _impl->getWidth();
 }
 unsigned int RaspiCam::getHeight() {
-    return  _impl->  getHeight();
+    return _impl->getHeight();
 }
 unsigned int RaspiCam::getBrightness() {
-    return      _impl-> getBrightness();
+    return _impl->getBrightness();
 }
 unsigned int RaspiCam::getRotation() {
-    return     _impl-> getRotation();
+    return _impl->getRotation();
+}
+unsigned int RaspiCam::getQuality() {
+	return _impl->getQuality();
 }
 int RaspiCam::getISO() {
-    return     _impl-> getISO();
+    return _impl->getISO();
 }
 int RaspiCam::getSharpness() {
-    return        _impl->getSharpness ();
+    return _impl->getSharpness();
 }
 int RaspiCam::getContrast() {
-    return       _impl-> getContrast();
+    return _impl->getContrast();
 }
 int RaspiCam::getSaturation() {
-    return       _impl->  getSaturation   ();
+    return _impl->getSaturation();
 }
 CAMERA_BOARD_ENCODING RaspiCam::getEncoding() {
-	return        impl->getEncoding();
+	return _impl->getEncoding();
 }
 CAMERA_BOARD_EXPOSURE RaspiCam::getExposure() {
-    return        _impl->getExposure ();
+    return _impl->getExposure ();
 }
 CAMERA_BOARD_AWB RaspiCam::getAWB() {
-    return       _impl-> getAWB ();
+    return _impl->getAWB();
 }
 CAMERA_BOARD_IMAGE_EFFECT RaspiCam::getImageEffect() {
-    return       _impl->   getImageEffect();
+    return _impl->getImageEffect();
 }
 CAMERA_BOARD_METERING RaspiCam::getMetering() {
-    return       _impl-> getMetering ();
+    return _impl->getMetering();
 }
 bool RaspiCam::isHorizontallyFlipped() {
-    return        _impl-> isHorizontallyFlipped();
+    return _impl->isHorizontallyFlipped();
 }
 bool RaspiCam::isVerticallyFlipped() {
-    return       _impl->  isVerticallyFlipped  ();
+    return _impl->isVerticallyFlipped();
 }
 

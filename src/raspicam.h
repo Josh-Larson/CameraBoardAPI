@@ -22,6 +22,7 @@ public:
 	void setHeight(unsigned int height);
 	void setCaptureSize(unsigned int width, unsigned int height);
 	void setBrightness(unsigned int brightness);
+	void setQuality(unsigned int quality);
 	void setRotation(int rotation);
 	void setISO(int iso);
 	void setSharpness(int sharpness);
@@ -40,6 +41,7 @@ public:
 	unsigned int getHeight();
 	unsigned int getBrightness();
 	unsigned int getRotation();
+	unsigned int getQuality();
 	int getISO();
 	int getSharpness();
 	int getContrast();

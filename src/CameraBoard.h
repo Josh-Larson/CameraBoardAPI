@@ -49,6 +49,7 @@ class CameraBoard {
 	unsigned int height;
 	unsigned int rotation; // 0 to 359
 	unsigned int brightness; // 0 to 100
+	unsigned int quality; // 0 to 100
 	int iso;
 	int sharpness; // -100 to 100
 	int contrast; // -100 to 100
@@ -58,6 +59,7 @@ class CameraBoard {
 	CAMERA_BOARD_AWB awb;
 	CAMERA_BOARD_IMAGE_EFFECT imageEffect;
 	CAMERA_BOARD_METERING metering;
+	bool changedSettings;
 	bool horizontalFlip;
 	bool verticalFlip;
 	
@@ -67,6 +69,7 @@ class CameraBoard {
 	MMAL_PARAM_AWBMODE_T convertAWB(CAMERA_BOARD_AWB awb);
 	MMAL_PARAM_IMAGEFX_T convertImageEffect(CAMERA_BOARD_IMAGE_EFFECT imageEffect);
 	void commitBrightness();
+	void commitQuality();
 	void commitRotation();
 	void commitISO();
 	void commitSharpness();
@@ -90,6 +93,13 @@ class CameraBoard {
 	CameraBoard() {
 		API_NAME = "CameraBoard";
 		setDefaults();
+		camera = NULL;
+		encoder = NULL;
+		encoder_connection = NULL;
+		encoder_pool = NULL;
+		camera_still_port = NULL;
+		encoder_input_port = NULL;
+		encoder_output_port = NULL;
 	}
 	int initialize();
 	int startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
@@ -101,6 +111,7 @@ class CameraBoard {
 	void setHeight(unsigned int height);
 	void setCaptureSize(unsigned int width, unsigned int height);
 	void setBrightness(unsigned int brightness);
+	void setQuality(unsigned int quality);
 	void setRotation(int rotation);
 	void setISO(int iso);
 	void setSharpness(int sharpness);
@@ -118,6 +129,7 @@ class CameraBoard {
 	unsigned int getHeight();
 	unsigned int getBrightness();
 	unsigned int getRotation();
+	unsigned int getQuality();
 	int getISO();
 	int getSharpness();
 	int getContrast();
