@@ -69,6 +69,7 @@ class CameraBoard {
 	MMAL_PARAM_AWBMODE_T convertAWB(CAMERA_BOARD_AWB awb);
 	MMAL_PARAM_IMAGEFX_T convertImageEffect(CAMERA_BOARD_IMAGE_EFFECT imageEffect);
 	void commitBrightness();
+	void commitQuality();
 	void commitRotation();
 	void commitISO();
 	void commitSharpness();

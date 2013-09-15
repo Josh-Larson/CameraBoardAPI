@@ -133,6 +133,7 @@ void CameraBoard::commitParameters() {
 	commitSharpness();
 	commitContrast();
 	commitBrightness();
+	commitQuality();
 	commitSaturation();
 	commitISO();
 	commitExposure();
@@ -287,11 +288,6 @@ int CameraBoard::createEncoder() {
 		destroyEncoder();
 		return -1;
 	}
-	if (mmal_port_parameter_set_uint32(encoder_output_port, MMAL_PARAMETER_JPEG_Q_FACTOR, 100)) { // Set the JPEG quality
-		cout << API_NAME << ": Could not set JPEG quality value.\n";
-		destroyEncoder();
-		return -1;
-	}
 	if (mmal_component_enable(encoder)) {
 		cout << API_NAME << ": Could not enable encoder component.\n";
 		destroyEncoder();
@@ -439,7 +435,10 @@ void CameraBoard::setBrightness(unsigned int brightness) {
 }
 
 void CameraBoard::setQuality(unsigned int quality) {
-	// TODO: Create implementation for this function
+	if (quality > 100)
+		quality = 100;
+	this->quality = quality;
+	changedSettings = true;
 }
 
 void CameraBoard::setRotation(int rotation) {
@@ -578,6 +577,11 @@ bool CameraBoard::isVerticallyFlipped() {
 
 void CameraBoard::commitBrightness() {
 	mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_BRIGHTNESS, (MMAL_RATIONAL_T) {brightness, 100});
+}
+
+void CameraBoard::commitQuality() {
+	if (encoder_output_port != NULL)
+		mmal_port_parameter_set_uint32(encoder_output_port, MMAL_PARAMETER_JPEG_Q_FACTOR, quality);
 }
 
 void CameraBoard::commitRotation() {
