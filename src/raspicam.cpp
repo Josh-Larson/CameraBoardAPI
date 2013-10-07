@@ -12,11 +12,14 @@ int RaspiCam::initialize() {
     return _impl->initialize();
 }
 
-int RaspiCam::startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
+int RaspiCam::startCapture(ImageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
     return _impl->startCapture(userCallback, preallocated_data,offset,length);
 }
 void RaspiCam::stopCapture() {
     _impl->stopCapture();
+}
+void RaspiCam::close() {
+	_impl->close();
 }
 int RaspiCam::takePicture(unsigned char * preallocated_data, unsigned int length) {
 	return _impl->takePicture(preallocated_data, length);

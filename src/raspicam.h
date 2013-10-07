@@ -13,8 +13,9 @@ public:
 
 
 	int initialize();
-	int startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
+	int startCapture(ImageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
 	void stopCapture();
+	void close();
 	int takePicture(unsigned char * preallocated_data, unsigned int length);
 //	void bufferCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
 	void commitParameters();
@@ -35,7 +36,6 @@ public:
 	void setMetering(CAMERA_BOARD_METERING metering);
 	void setHorizontalFlip(bool hFlip);
 	void setVerticalFlip(bool vFlip);
-	void setImageCallback(imageTakenCallback callback);
 	
 	unsigned int getWidth();
 	unsigned int getHeight();

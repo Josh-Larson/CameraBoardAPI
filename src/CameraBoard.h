@@ -29,22 +29,24 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CAMERA_BOARD_H
 
 #include "CameraBoardTypes.h"
-#include "mmal/mmal.h"
-#include "mmal/mmal_connection.h"
 
 #define MMAL_CAMERA_CAPTURE_PORT 2
-#define STILLS_FRAME_RATE_NUM 3
+#define STILLS_FRAME_RATE_NUM 30
 #define STILLS_FRAME_RATE_DEN 1
 
 class CameraBoard {
 	private:
-	MMAL_COMPONENT_T * camera;	 /// Pointer to the camera component
-	MMAL_COMPONENT_T * encoder;	/// Pointer to the encoder component
-	MMAL_CONNECTION_T * encoder_connection; // Connection from the camera to the encoder
-	MMAL_POOL_T * encoder_pool;				  /// Pointer to the pool of buffers used by encoder output port
-	MMAL_PORT_T * camera_still_port;
-	MMAL_PORT_T * encoder_input_port;
-	MMAL_PORT_T * encoder_output_port;
+	
+	// Low-level Camera Board variables
+	CAMERA_BOARD_USERDATA * userdata;	// Pointer to the userdata for the encoder output port
+	MMAL_COMPONENT_T * camera;					// Pointer to the camera componen
+	MMAL_COMPONENT_T * encoder;					// Pointer to the encoder component
+	MMAL_CONNECTION_T * encoder_connection;		// Connection from the camera to the encoder
+	MMAL_POOL_T * encoder_pool;					// Pointer to the pool of buffers used by encoder output port
+	MMAL_PORT_T * camera_still_port;			// Pointer to the still port on the camera
+	MMAL_PORT_T * encoder_input_port;			// Pointer to the input port on the encoder
+	MMAL_PORT_T * encoder_output_port;			// Pointer to the output port on the encoder
+	// Control variables
 	unsigned int width;
 	unsigned int height;
 	unsigned int rotation; // 0 to 359
@@ -59,10 +61,15 @@ class CameraBoard {
 	CAMERA_BOARD_AWB awb;
 	CAMERA_BOARD_IMAGE_EFFECT imageEffect;
 	CAMERA_BOARD_METERING metering;
-	bool changedSettings;
 	bool horizontalFlip;
 	bool verticalFlip;
+	// State variables
+	bool closed;
+	bool changedSettings;
+	// Error variables
+	std::ostream * errorStream;
 	
+	// Control Parameter methods
 	MMAL_FOURCC_T convertEncoding(CAMERA_BOARD_ENCODING encoding);
 	MMAL_PARAM_EXPOSUREMETERINGMODE_T convertMetering(CAMERA_BOARD_METERING metering);
 	MMAL_PARAM_EXPOSUREMODE_T convertExposure(CAMERA_BOARD_EXPOSURE exposure);
@@ -80,12 +87,16 @@ class CameraBoard {
 	void commitImageEffect();
 	void commitMetering();
 	void commitFlips();
+	// Initialize/Start/Stop methods
 	int startCapture();
 	int createCamera();
 	int createEncoder();
+	int initStillPort();
+	int initVideoPort();
 	void destroyCamera();
 	void destroyEncoder();
 	void setDefaults();
+	// Miscelaneous
 	MMAL_STATUS_T connectPorts(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection);
 	
 	public:
@@ -93,6 +104,7 @@ class CameraBoard {
 	CameraBoard() {
 		API_NAME = "CameraBoard";
 		setDefaults();
+		setErrorOutput(1); // Standard output stream
 		camera = NULL;
 		encoder = NULL;
 		encoder_connection = NULL;
@@ -100,12 +112,23 @@ class CameraBoard {
 		camera_still_port = NULL;
 		encoder_input_port = NULL;
 		encoder_output_port = NULL;
+		closed = true;
 	}
+	
+	~CameraBoard() {
+		if (!closed)
+			close();
+	}
+	
+	// Initialize/Start/Stop methods
 	int initialize();
-	int startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
-	void stopCapture();
+	int startCapture(ImageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length);
 	int takePicture(unsigned char * preallocated_data, unsigned int length);
-	void bufferCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+	void stopCapture();
+	void close();
+	// Miscelaneous
+	void setErrorOutput(int mode);
+	// Control Parameter methods
 	void commitParameters();
 	void setWidth(unsigned int width);
 	void setHeight(unsigned int height);
@@ -124,7 +147,6 @@ class CameraBoard {
 	void setMetering(CAMERA_BOARD_METERING metering);
 	void setHorizontalFlip(bool hFlip);
 	void setVerticalFlip(bool vFlip);
-	
 	unsigned int getWidth();
 	unsigned int getHeight();
 	unsigned int getBrightness();

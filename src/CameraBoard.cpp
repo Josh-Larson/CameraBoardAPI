@@ -32,24 +32,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal/mmal_util_params.h"
 #include <iostream>
 #include <semaphore.h>
+
+#include <ctime>
+#include <sys/time.h>
 using namespace std;
 
-typedef struct {
-	CameraBoard * cameraBoard;
-	MMAL_POOL_T * encoderPool;
-	imageTakenCallback imageCallback;
-	sem_t *mutex;
-	unsigned char * data;
-	unsigned int bufferPosition;
-	unsigned int startingOffset;
-	unsigned int offset;
-	unsigned int length;
-} CAMERA_BOARD_USERDATA;
+unsigned long getmsofday() {
+   struct timeval tv;
+   gettimeofday(&tv, NULL);
+   return (long long)tv.tv_sec*1000 + tv.tv_usec/1000;
+}
 
 static void control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
+	CAMERA_BOARD_USERDATA *userdata = (CAMERA_BOARD_USERDATA*)port->userdata;
 	if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED) {
 	} else {
 		// Unexpected control callback event!
+		(userdata->unexpectedControlCallbacks)++;
 	}
 	mmal_buffer_header_release(buffer);
 }
@@ -59,32 +58,23 @@ static void buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 	if (userdata == NULL || userdata->cameraBoard == NULL) {
 		
 	} else {
-		unsigned int flags = buffer->flags;
+		bool isRGB = userdata->cameraBoard->getEncoding() == CAMERA_BOARD_ENCODING_RGB;
+		bool canCopy = true;
+		if (userdata->offset + buffer->length >= userdata->length) {
+			canCopy = false;
+			if (userdata->errorStream)
+				*userdata->errorStream << userdata->cameraBoard->API_NAME << ": Buffer provided was too small! Failed to copy data into buffer.\n";
+			userdata->cameraBoard = NULL;
+		}
 		mmal_buffer_header_mem_lock(buffer);
-		for (unsigned int i = 0; i < buffer->length; i++, userdata->bufferPosition++) {
-			if (userdata->offset >= userdata->length) {
-				cout << userdata->cameraBoard->API_NAME << ": Buffer provided was too small! Failed to copy data into buffer.\n";
-				userdata->cameraBoard = NULL;
-				break;
-			} else {
-				if (userdata->cameraBoard->getEncoding() == CAMERA_BOARD_ENCODING_RGB) {
-					// Determines if the byte is an RGB value
-					if (userdata->bufferPosition >= 54) {
-						userdata->data[userdata->offset] = buffer->data[i];
-						userdata->offset++;
-					}
-				} else {
-					userdata->data[userdata->offset] = buffer->data[i];
-					userdata->offset++;
-				}
+		if (canCopy) {
+			unsigned int i = (isRGB) ? 54 : 0;
+			for (; i < buffer->length; i++, userdata->offset++) {
+				userdata->data[userdata->offset] = buffer->data[i];
 			}
 		}
 		mmal_buffer_header_mem_unlock(buffer);
-		unsigned int END_FLAG = 0;
-		END_FLAG |= MMAL_BUFFER_HEADER_FLAG_FRAME_END;
-		END_FLAG |= MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED;
-		END_FLAG &= flags;
-		if (END_FLAG != 0) {
+		if ((buffer->flags & (MMAL_BUFFER_HEADER_FLAG_FRAME_END | MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED)) != 0) {
 			if (userdata->mutex == NULL) {
 				userdata->imageCallback(userdata->data, userdata->startingOffset, userdata->length - userdata->startingOffset);
 			} else {
@@ -144,25 +134,29 @@ void CameraBoard::commitParameters() {
 	commitFlips();
 	// Set Video Stabilization
 	if (mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_VIDEO_STABILISATION, 0) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set video stabilization parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set video stabilization parameter.\n";
 	// Set Exposure Compensation
 	if (mmal_port_parameter_set_int32(camera->control, MMAL_PARAMETER_EXPOSURE_COMP , 0) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set exposure compensation parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set exposure compensation parameter.\n";
 	// Set Color Efects
 	MMAL_PARAMETER_COLOURFX_T colfx = {{MMAL_PARAMETER_COLOUR_EFFECT,sizeof(colfx)}, 0, 0, 0};
 	colfx.enable = 0;
 	colfx.u = 128;
 	colfx.v = 128;
 	if (mmal_port_parameter_set(camera->control, &colfx.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set color effects parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set color effects parameter.\n";
 	// Set ROI
-	MMAL_PARAMETER_INPUT_CROP_T crop = {{MMAL_PARAMETER_INPUT_CROP, sizeof(MMAL_PARAMETER_INPUT_CROP_T)}};
+	MMAL_PARAMETER_INPUT_CROP_T crop = {{MMAL_PARAMETER_INPUT_CROP, sizeof(MMAL_PARAMETER_INPUT_CROP_T)}, {0, 0, 0, 0}};
 	crop.rect.x = (65536 * 0);
 	crop.rect.y = (65536 * 0);
 	crop.rect.width = (65536 * 1);
 	crop.rect.height = (65536 * 1);
 	if (mmal_port_parameter_set(camera->control, &crop.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set ROI parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set ROI parameter.\n";
 	// Set encoder encoding
 	if (encoder_output_port != NULL) {
 		encoder_output_port->format->encoding = convertEncoding(encoding);
@@ -184,22 +178,25 @@ MMAL_STATUS_T CameraBoard::connectPorts(MMAL_PORT_T *output_port, MMAL_PORT_T *i
 
 int CameraBoard::createCamera() {
 	if (mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &camera)) {
-		cout << API_NAME << ": Failed to create camera component.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to create camera component.\n";
 		destroyCamera();
 		return -1;
 	}
 	
 	if (!camera->output_num) {
-		cout << API_NAME << ": Camera does not have output ports!\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Camera does not have output ports!\n";
 		destroyCamera();
 		return -1;
 	}
 	
 	camera_still_port = camera->output[MMAL_CAMERA_CAPTURE_PORT];
 	
-	// Enable the camera, and tell it its control callback function
+	// Enable the camera, and set the control callback function
 	if (mmal_port_enable(camera->control, control_callback)) {
-		cout << API_NAME << ": Could not enable control port.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not enable control port.\n";
 		destroyCamera();
 		return -1;
 	}
@@ -218,7 +215,8 @@ int CameraBoard::createCamera() {
 		MMAL_PARAM_TIMESTAMP_MODE_RESET_STC // use_stc_timestamp
 	};
 	if (mmal_port_parameter_set(camera->control, &camConfig.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Could not set port parameters.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not set port parameters.\n";
 	
 	commitParameters();
 	
@@ -239,19 +237,22 @@ int CameraBoard::createCamera() {
 	camera_still_port->buffer_num = camera_still_port->buffer_num_recommended;
 	
 	if (mmal_port_format_commit(camera_still_port)) {
-		cout << API_NAME << ": Camera still format could not be set.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Camera still format could not be set.\n";
 		destroyCamera();
 		return -1;
 	}
 	
 	if (mmal_component_enable(camera)) {
-		cout << API_NAME << ": Camera component could not be enabled.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Camera component could not be enabled.\n";
 		destroyCamera();
 		return -1;
 	}
 	
 	if (!(encoder_pool = mmal_port_pool_create(camera_still_port, camera_still_port->buffer_num, camera_still_port->buffer_size))) {
-		cout << API_NAME << ": Failed to create buffer header pool for camera.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to create buffer header pool for camera.\n";
 		destroyCamera();
 		return -1;
 	}
@@ -261,12 +262,14 @@ int CameraBoard::createCamera() {
 
 int CameraBoard::createEncoder() {
 	if (mmal_component_create(MMAL_COMPONENT_DEFAULT_IMAGE_ENCODER, &encoder)) {
-		cout << API_NAME << ": Could not create encoder component.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not create encoder component.\n";
 		destroyEncoder();
 		return -1;
 	}
 	if (!encoder->input_num || !encoder->output_num) {
-		cout << API_NAME << ": Encoder does not have input/output ports.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Encoder does not have input/output ports.\n";
 		destroyEncoder();
 		return -1;
 	}
@@ -284,17 +287,20 @@ int CameraBoard::createEncoder() {
 		encoder_output_port->buffer_num = encoder_output_port->buffer_num_min;
 	
 	if (mmal_port_format_commit(encoder_output_port)) {
-		cout << API_NAME << ": Could not set format on encoder output port.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not set format on encoder output port.\n";
 		destroyEncoder();
 		return -1;
 	}
 	if (mmal_component_enable(encoder)) {
-		cout << API_NAME << ": Could not enable encoder component.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not enable encoder component.\n";
 		destroyEncoder();
 		return -1;
 	}
 	if (!(encoder_pool = mmal_port_pool_create(encoder_output_port, encoder_output_port->buffer_num, encoder_output_port->buffer_size))) {
-		cout << API_NAME << ": Failed to create buffer header pool for encoder output port.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to create buffer header pool for encoder output port.\n";
 		destroyEncoder();
 		return -1;
 	}
@@ -309,9 +315,8 @@ void CameraBoard::destroyCamera() {
 }
 
 void CameraBoard::destroyEncoder() {
-	if (encoder_pool) {
+	if (encoder_pool)
 		mmal_port_pool_destroy(encoder->output[0], encoder_pool);
-	}
 	if (encoder) {
 		mmal_component_destroy(encoder);
 		encoder = NULL;
@@ -319,12 +324,16 @@ void CameraBoard::destroyEncoder() {
 }
 
 int CameraBoard::initialize() {
+	if (!closed)
+		return -1;
 	if (createCamera()) {
-		cout << API_NAME << ": Failed to create camera component.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to create camera component.\n";
 		destroyCamera();
 		return -1;
 	} else if (createEncoder()) {
-		cout << API_NAME << ": Failed to create encoder component.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to create encoder component.\n";
 		destroyCamera();
 		return -1;
 	} else {
@@ -332,40 +341,47 @@ int CameraBoard::initialize() {
 		encoder_input_port  = encoder->input[0];
 		encoder_output_port = encoder->output[0];
 		if (connectPorts(camera_still_port, encoder_input_port, &encoder_connection) != MMAL_SUCCESS) {
-			cout << "ERROR: Could not connect encoder ports!\n";
+			if (errorStream)
+				*errorStream << "ERROR: Could not connect encoder ports!\n";
 			return -1;
 		}
+		userdata = new CAMERA_BOARD_USERDATA;
+		userdata->cameraBoard = this;
+		userdata->encoderPool = encoder_pool;
+		userdata->mutex = new sem_t;
+		userdata->errorStream = NULL;
+		userdata->data = NULL;
+		userdata->bufferPosition = 0;
+		userdata->offset = 0;
+		userdata->startingOffset = 0;
+		userdata->length = 0;
+		userdata->unexpectedControlCallbacks = 0;
+		userdata->imageCallback = NULL;
 	}
 	return 0;
 }
 
 int CameraBoard::takePicture(unsigned char * preallocated_data, unsigned int length) {
 	int ret = 0;
-	sem_t mutex;
-	sem_init(&mutex, 0, 0);
-	CAMERA_BOARD_USERDATA * userdata = new CAMERA_BOARD_USERDATA();
-	userdata->cameraBoard = this;
-	userdata->encoderPool = encoder_pool;
-	userdata->mutex = &mutex;
+	sem_init(userdata->mutex, 0, 0);
+	// Initialize userdata
+	userdata->errorStream = errorStream;
 	userdata->data = preallocated_data;
 	userdata->bufferPosition = 0;
 	userdata->offset = 0;
 	userdata->startingOffset = 0;
 	userdata->length = length;
-	userdata->imageCallback = NULL;
 	encoder_output_port->userdata = (struct MMAL_PORT_USERDATA_T *) userdata;
 	if ((ret = startCapture()) != 0) return ret;
-	sem_wait(&mutex);
-	sem_destroy(&mutex);
+	sem_wait(userdata->mutex);
 	stopCapture();
 	return ret;
 }
 
-int CameraBoard::startCapture(imageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
-	CAMERA_BOARD_USERDATA * userdata = new CAMERA_BOARD_USERDATA();
-	userdata->cameraBoard = this;
-	userdata->encoderPool = encoder_pool;
+int CameraBoard::startCapture(ImageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
+	// Initialize userdata
 	userdata->mutex = NULL;
+	userdata->errorStream = errorStream;
 	userdata->data = preallocated_data;
 	userdata->bufferPosition = 0;
 	userdata->offset = offset;
@@ -377,16 +393,19 @@ int CameraBoard::startCapture(imageTakenCallback userCallback, unsigned char * p
 }
 
 int CameraBoard::startCapture() {
+	unsigned long start = getmsofday();
 	// If the parameters were changed and this function wasn't called, it will be called here
 	// However if the parameters weren't changed, the function won't do anything - it will return right away
 	commitParameters();
 	
 	if (encoder_output_port->is_enabled) {
-		cout << API_NAME << ": Could not enable encoder output port. Try waiting longer before attempting to take another picture.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not enable encoder output port. Try waiting longer before attempting to take another picture.\n";
 		return -1;
 	}
 	if (mmal_port_enable(encoder_output_port, buffer_callback) != MMAL_SUCCESS) {
-		cout << API_NAME << ": Could not enable encoder output port.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Could not enable encoder output port.\n";
 		return -1;
 	}
 	int num = mmal_queue_length(encoder_pool->queue);
@@ -394,22 +413,52 @@ int CameraBoard::startCapture() {
 		MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(encoder_pool->queue);
 		
 		if (!buffer)
-			cout << API_NAME << ": Could not get buffer (#" << b << ") from pool queue.\n";
+			if (errorStream)
+				*errorStream << API_NAME << ": Could not get buffer (#" << b << ") from pool queue.\n";
 		
 		if (mmal_port_send_buffer(encoder_output_port, buffer)!= MMAL_SUCCESS)
-			cout << API_NAME << ": Could not send a buffer (#" << b << ") to encoder output port.\n";
+			if (errorStream)
+				*errorStream << API_NAME << ": Could not send a buffer (#" << b << ") to encoder output port.\n";
 	}
 	if (mmal_port_parameter_set_boolean(camera_still_port, MMAL_PARAMETER_CAPTURE, 1) != MMAL_SUCCESS) {
-		cout << API_NAME << ": Failed to start capture.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to start capture.\n";
 		return -1;
 	}
+	cout << "Took " << (getmsofday() - start) << "ms\n";
 	return 0;
 }
 
 void CameraBoard::stopCapture() {
 	if (!encoder_output_port->is_enabled) return;
-	if (mmal_port_disable(encoder_output_port))
-	delete (CAMERA_BOARD_USERDATA*)encoder_output_port->userdata;
+	if (mmal_port_disable(encoder_output_port)) return;
+}
+
+void CameraBoard::close() {
+	stopCapture();
+	delete userdata;
+	if (camera_still_port->is_enabled)
+		mmal_port_disable(camera_still_port);
+	destroyEncoder();
+	destroyCamera();
+	closed = true;
+}
+
+void CameraBoard::setErrorOutput(int mode) {
+	switch (mode) {
+		case 0:
+			errorStream = NULL;
+			break;
+		case 1:
+			errorStream = &cout;
+			break;
+		case 2:
+			errorStream = &cerr;
+			break;
+		default:
+			errorStream = &cout;
+			break;
+	}
 }
 
 void CameraBoard::setWidth(unsigned int width) {
@@ -593,46 +642,54 @@ void CameraBoard::commitRotation() {
 
 void CameraBoard::commitISO() {
 	if (mmal_port_parameter_set_uint32(camera->control, MMAL_PARAMETER_ISO, iso) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set ISO parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set ISO parameter.\n";
 }
 
 void CameraBoard::commitSharpness() {
 	if (mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_SHARPNESS, (MMAL_RATIONAL_T) {sharpness, 100}) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set sharpness parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set sharpness parameter.\n";
 }
 
 void CameraBoard::commitContrast() {
 	if (mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_CONTRAST, (MMAL_RATIONAL_T) {contrast, 100}) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set contrast parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set contrast parameter.\n";
 }
 
 void CameraBoard::commitSaturation() {
 	if (mmal_port_parameter_set_rational(camera->control, MMAL_PARAMETER_SATURATION, (MMAL_RATIONAL_T) {saturation, 100}) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set saturation parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set saturation parameter.\n";
 }
 
 void CameraBoard::commitExposure() {
 	MMAL_PARAMETER_EXPOSUREMODE_T exp_mode = {{MMAL_PARAMETER_EXPOSURE_MODE,sizeof(exp_mode)}, convertExposure(exposure)};
 	if (mmal_port_parameter_set(camera->control, &exp_mode.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set exposure parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set exposure parameter.\n";
 }
 
 void CameraBoard::commitAWB() {
 	MMAL_PARAMETER_AWBMODE_T param = {{MMAL_PARAMETER_AWB_MODE,sizeof(param)}, convertAWB(awb)};
 	if (mmal_port_parameter_set(camera->control, &param.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set AWB parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set AWB parameter.\n";
 }
 
 void CameraBoard::commitImageEffect() {
 	MMAL_PARAMETER_IMAGEFX_T imgFX = {{MMAL_PARAMETER_IMAGE_EFFECT,sizeof(imgFX)}, convertImageEffect(imageEffect)};
 	if (mmal_port_parameter_set(camera->control, &imgFX.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set image effect parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set image effect parameter.\n";
 }
 
 void CameraBoard::commitMetering() {
 	MMAL_PARAMETER_EXPOSUREMETERINGMODE_T meter_mode = {{MMAL_PARAMETER_EXP_METERING_MODE, sizeof(meter_mode)}, convertMetering(metering)};
 	if (mmal_port_parameter_set(camera->control, &meter_mode.hdr) != MMAL_SUCCESS)
-		cout << API_NAME << ": Failed to set metering parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set metering parameter.\n";
 }
 
 void CameraBoard::commitFlips() {
@@ -646,7 +703,8 @@ void CameraBoard::commitFlips() {
 	if (mmal_port_parameter_set(camera->output[0], &mirror.hdr) != MMAL_SUCCESS ||
 		mmal_port_parameter_set(camera->output[1], &mirror.hdr) != MMAL_SUCCESS ||
 		mmal_port_parameter_set(camera->output[2], &mirror.hdr))
-		cout << API_NAME << ": Failed to set horizontal/vertical flip parameter.\n";
+		if (errorStream)
+			*errorStream << API_NAME << ": Failed to set horizontal/vertical flip parameter.\n";
 }
 
 MMAL_FOURCC_T CameraBoard::convertEncoding(CAMERA_BOARD_ENCODING encoding) {

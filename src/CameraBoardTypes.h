@@ -1,6 +1,25 @@
 #ifndef CameraBoardTypes_H
 #define CameraBoardTypes_H
-typedef void (*imageTakenCallback)(unsigned char * data, unsigned int image_offset, unsigned int length);
+#include "mmal/mmal.h"
+#include "mmal/mmal_connection.h"
+#include <iostream>
+#include <semaphore.h>
+typedef void (*ImageTakenCallback)(unsigned char * data, unsigned int image_offset, unsigned int length);
+
+class CameraBoard;
+typedef struct {
+	CameraBoard * cameraBoard;
+	MMAL_POOL_T * encoderPool;
+	std::ostream * errorStream;
+	ImageTakenCallback imageCallback;
+	sem_t * mutex;
+	unsigned char * data;
+	unsigned int bufferPosition;
+	unsigned int startingOffset;
+	unsigned int offset;
+	unsigned int length;
+	unsigned int unexpectedControlCallbacks;
+} CAMERA_BOARD_USERDATA;
 
 typedef enum CAMERA_BOARD_EXPOSURE {
 	CAMERA_BOARD_EXPOSURE_OFF,
@@ -68,5 +87,6 @@ typedef enum CAMERA_BOARD_ENCODING {
 	CAMERA_BOARD_ENCODING_PNG,
 	CAMERA_BOARD_ENCODING_RGB
 } CAMERA_BOARD_ENCODING;
+
 #endif
 

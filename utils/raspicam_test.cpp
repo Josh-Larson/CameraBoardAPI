@@ -1,27 +1,31 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <cstdio>
-#include <cstdlib>
+#include <stdio.h>
 #include "raspicam.h"
+#include <cmath>
+#include <ctime>
+#include <sys/time.h>
 using namespace std;
 
 RaspiCam cameraBoard;
 volatile int pictures_taken = 0;
 const int max_pictures = 5;
 
-///Command line functions
-//returns the index of a param or -1 if not present
-int findParam ( std::string param,int argc, char *argv[] );
-//Returns the value of a param. If not present, returns the defvalue
-string getParamString ( string id,int argc,char **argv,string defvalue="" );
-float getParamVal ( string id,int argc,char **argv,float defvalue=-1 );
-//prints command line usage
-void usage();
+int atoi(string s) {
+	stringstream ss;
+	ss << s;
+	int i = 0;
+	ss >> i;
+	return i;
+}
 
+unsigned long getmsofday() {
+   struct timeval tv;
+   gettimeofday(&tv, NULL);
+   return (long long)tv.tv_sec*1000 + tv.tv_usec/1000;
+}
 
-
-/// CODE
 void saveImage(string filename, unsigned char *data, unsigned int length) {
 	FILE * file = fopen(filename.c_str(), "w");
 	fwrite(data, 1, length, file);
@@ -37,70 +41,52 @@ void onImageTaken(unsigned char *data, unsigned int image_offset, unsigned int l
 	cout << "Saved Image\n";
 	pictures_taken++;
 }
-//prints program command line usage
-void usage()
-{
-  cout<<"-w val : sets image width (640 default)"<<endl;
-  cout<<"-h val : sets image height (480 default)"<<endl;
-  cout<<"-iso val: set iso [100,800] (400 default)"<<endl;
+
+void testCamera(RaspiCam * board, unsigned char * data, unsigned int length, int width, int height) {
+	int iterations = 10;
+	double totalTime = 0;
+	double minTime = -1;
+	double maxTime = -1;
+	double meanTime = 0;
+	for (int i = 0; i < iterations; i++) {
+		unsigned long startTime = getmsofday();
+		board->takePicture(data, length);
+		double time = getmsofday() - startTime;
+		cout << "Picture taken in " << time << "ms\n";
+		totalTime += time;
+		meanTime += time;
+		if (time < minTime || minTime == -1) minTime = time;
+		if (time > maxTime || maxTime == -1) maxTime = time;
+	}
+	meanTime /= iterations;
+	cout << "Statistics: (" << width << "x" << height << ")\n";
+	cout << "\tMin:          " << minTime << "\n";
+	cout << "\tMax:          " << maxTime << "\n";
+	cout << "\tAverage Time: " << meanTime << "\n";
+	cout << "\tTotal Time:   " << totalTime << "\n";
 }
 
-
 int main(int argc, char *argv[]) {
-  if (findParam("--help",argc,argv)!=-1) {
-      usage();
-      return 0;    
-  }
-  
-	int width = getParamVal("-w",argc,argv,640);
-	int height =getParamVal("-h",argc,argv,480);
-	
-	unsigned int length = 54 + width*height*3; // Header + Image Data + Padding
+	int width = 640;
+	int height = 480;
+	if (argc >= 2) width = atoi(argv[1]);
+	if (argc >= 3) height = atoi(argv[2]);
+	unsigned int length = 54 + width*height*4; // Header + Image Data
 	
 	cout << "Initializing...\n";
+	
 	cameraBoard.setWidth(width);
 	cameraBoard.setHeight(height);
-	cameraBoard.setEncoding(CAMERA_BOARD_ENCODING_BMP);
-	cameraBoard.setISO(getParamVal("-iso",argc,argv,400));
+	cameraBoard.setQuality(10);
+	cameraBoard.setEncoding(CAMERA_BOARD_ENCODING_JPEG);
 	
 	if (cameraBoard.initialize()) return -1;
 	
+	cout << "Taking Video Stream:\n";
 	unsigned char * data = new unsigned char[length];
-
-	if (cameraBoard.takePicture(data, length)) return -1;
-		saveImage("output_blocking.bmp", data, length);
-
-	while (pictures_taken < max_pictures) {
-		if (cameraBoard.startCapture(onImageTaken, data, 0, length)) return -1;
-		const int currentImages = pictures_taken;
-		while (currentImages == pictures_taken)
-			usleep(2000);
-		cameraBoard.stopCapture();
-		usleep(3000);
-	}
+	testCamera(&cameraBoard, data, length, width, height);
+	cameraBoard.close();
+	cout << "Stopped capture.\n";
 	return 0;
 }
 
-
-//returns the index of a param or -1 if not present
-int findParam ( std::string param,int argc, char *argv[] )
-{
-    for ( int i=0; i<argc; i++ )
-        if ( string ( argv[i] ) ==param ) return i;
-
-    return -1;
-}
-//Returns the value of a param. If not present, returns the defvalue
-float getParamVal ( string id,int argc,char **argv,float defvalue  )
-{
-    if ( findParam ( id,argc,argv ) !=-1 )
-        return atof ( argv[  findParam ( id,argc,argv ) +1] );
-    else return defvalue;
-}
-//Returns the value of a param as a string.  If not present, returns the defvalue
-string getParamString ( string id,int argc,char **argv,string defvalue  )
-{
-  int idx=findParam ( id,argc,argv );
-    if ( idx !=-1 ) return  argv[  idx+1] ;
-    else return defvalue;
-}
