@@ -32,16 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mmal/mmal_util_params.h"
 #include <iostream>
 #include <semaphore.h>
-
-#include <ctime>
-#include <sys/time.h>
 using namespace std;
-
-unsigned long getmsofday() {
-   struct timeval tv;
-   gettimeofday(&tv, NULL);
-   return (long long)tv.tv_sec*1000 + tv.tv_usec/1000;
-}
 
 static void control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
 	CAMERA_BOARD_USERDATA *userdata = (CAMERA_BOARD_USERDATA*)port->userdata;
@@ -393,7 +384,6 @@ int CameraBoard::startCapture(ImageTakenCallback userCallback, unsigned char * p
 }
 
 int CameraBoard::startCapture() {
-	unsigned long start = getmsofday();
 	// If the parameters were changed and this function wasn't called, it will be called here
 	// However if the parameters weren't changed, the function won't do anything - it will return right away
 	commitParameters();
@@ -425,7 +415,6 @@ int CameraBoard::startCapture() {
 			*errorStream << API_NAME << ": Failed to start capture.\n";
 		return -1;
 	}
-	cout << "Took " << (getmsofday() - start) << "ms\n";
 	return 0;
 }
 
