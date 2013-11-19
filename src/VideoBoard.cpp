@@ -218,13 +218,15 @@ int VideoBoard::getHeight() {
 
 bool VideoBoard::initialize(unsigned int method) {
 	if (!initialized) {
-		this->method = method;
 		if (!openDevice())
 			return false;
 		if (!initializeDevice())
 			return false;
 		if (method == METHOD_MMAP)
 			initMmap();
+		else if (method == METHOD_READ)
+			preAllocatedBuffer = new unsigned char[bufferSize];
+		this->method = method;
 		initialized = true;
 		return true;
 	}
@@ -232,6 +234,8 @@ bool VideoBoard::initialize(unsigned int method) {
 
 void VideoBoard::destroy() {
 	if (initialized) {
+		if (method == METHOD_READ)
+			delete preAllocatedBuffer;
 		if (close(fd) == -1) {
 			cout << "Error: Failed to close device\n";
 			return;
@@ -246,9 +250,7 @@ void VideoBoard::destroy() {
 }
 
 void VideoBoard::startCapturing() {
-	if (!initialized) {
-		cout << "Error: VideoBoard is not initialized!";
-	}
+	if (!initialized) return;
 	if (method == METHOD_MMAP) {
 		enum v4l2_buf_type type;
 		for (unsigned int i = 0; i < numBuffers; i++) {
@@ -273,11 +275,12 @@ void VideoBoard::startCapturing() {
 }
 
 VideoBuffer VideoBoard::grabFrame() {
+	if (!initialized) return VideoBuffer(this, NULL, 0);
 	Buffer b;
 	b.start = NULL;
 	b.length = bufferSize;
 	if (method == METHOD_READ) {
-		b.start = new unsigned char[bufferSize];
+		b.start = preAllocatedBuffer;
 		readFrame(&b);
 	} else if (method == METHOD_MMAP) {
 		readFrameMmap(&b);
@@ -350,10 +353,8 @@ void VideoBoard::releaseImage(const char * name) {
 }
 
 void VideoBoard::releaseFrame(VideoBuffer * buffer) {
-	if (method == METHOD_READ) {
-		delete buffer->data();
-		return;
-	} else if (method == METHOD_MMAP) {
+	if (!initialized) return;
+	if (method == METHOD_MMAP) {
 		if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
 			cout << "Error: VIDIOC_QBUF in releaseFrame()\n";
 		}

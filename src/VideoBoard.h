@@ -13,6 +13,7 @@ class VideoBoard {
 	unsigned int method;
 	unsigned int numBuffers;
 	unsigned int bufferSize;
+	unsigned char * preAllocatedBuffer;
 	vector <ImageContainer> images;
 	Buffer * buffers;
 	struct v4l2_buffer buf;
