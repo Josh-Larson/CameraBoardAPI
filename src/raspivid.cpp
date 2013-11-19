@@ -8,6 +8,7 @@ RaspiVid::RaspiVid(const char * device, int width, int height) {
 	_impl = new VideoBoard(device, width, height);
 }
 RaspiVid::~RaspiVid() {
+	_impl->destroy();
 	delete _impl;
 }
 

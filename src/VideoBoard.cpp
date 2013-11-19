@@ -31,21 +31,24 @@ int VideoBoard::readFrame(Buffer * buffer) {
 	return 0;
 }
 
-bool VideoBoard::readFrameMmap(Buffer * buffer) {
+int VideoBoard::readFrameMmap(Buffer * buffer) {
 	CLEAR(buf);
 	
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
 	
-	if (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
+	while (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
 		switch (errno) {
 			case EAGAIN:
-				return false;
-				
+				continue;
+			case EINTR:
+				continue;
 			case EIO:
+				/* Could ignore EIO, see spec. */
+				/* fall through */
 			default:
 				cout << "Error: VIDIOC_DQBUF in readFrameMmap(Buffer*)\n";
-				return true;
+				return errno;
 		}
 	}
 	
@@ -53,7 +56,7 @@ bool VideoBoard::readFrameMmap(Buffer * buffer) {
 	
 	buffer->start = buffers[buf.index].start;
 	buffer->length = buf.bytesused;
-	return true;
+	return 0;
 }
 
 bool VideoBoard::openDevice() {
@@ -194,10 +197,15 @@ void VideoBoard::initMmap() {
 }
 
 VideoBoard::VideoBoard(const char * device, int width, int height) {
-	this->device = device;
-	this->width = width;
-	this->height = height;
-	fd = -1;
+	this->device      = device;
+	this->width       = width;
+	this->height      = height;
+	this->initialized = false;
+	this->fd          = -1;
+}
+
+VideoBoard::~VideoBoard() {
+	destroy();
 }
 
 int VideoBoard::getWidth() {
@@ -209,26 +217,38 @@ int VideoBoard::getHeight() {
 }
 
 bool VideoBoard::initialize(unsigned int method) {
-	this->method = method;
-	if (!openDevice())
-		return false;
-	if (!initializeDevice())
-		return false;
-	if (method == METHOD_MMAP)
-		initMmap();
-	return true;
+	if (!initialized) {
+		this->method = method;
+		if (!openDevice())
+			return false;
+		if (!initializeDevice())
+			return false;
+		if (method == METHOD_MMAP)
+			initMmap();
+		initialized = true;
+		return true;
+	}
 }
 
 void VideoBoard::destroy() {
-	if (close(fd) == -1)
-		cout << "Error: Failed to close device\n";
+	if (initialized) {
+		if (close(fd) == -1) {
+			cout << "Error: Failed to close device\n";
+			return;
+		}
+		fd = -1;
+		initialized = false;
+	}
 	for (unsigned int i = 0; i < images.size(); i++) {
 		pthread_mutex_destroy(images[i].mtx);
 	}
-	fd = -1;
+	images.clear();
 }
 
 void VideoBoard::startCapturing() {
+	if (!initialized) {
+		cout << "Error: VideoBoard is not initialized!";
+	}
 	if (method == METHOD_MMAP) {
 		enum v4l2_buf_type type;
 		for (unsigned int i = 0; i < numBuffers; i++) {
@@ -262,34 +282,6 @@ VideoBuffer VideoBoard::grabFrame() {
 	} else if (method == METHOD_MMAP) {
 		readFrameMmap(&b);
 	}
-	#if 0
-	while (true) {
-		if (method == METHOD_READ) {
-			#if 0
-			fd_set fds;
-		
-			FD_ZERO(&fds);
-			FD_SET(fd, &fds);
-			struct timeval tv = (timeval){1, 0}; // seconds, microseconds
-			switch (select(fd + 1, &fds, NULL, NULL, &tv)) {
-				case -1:
-					if (EINTR == errno)
-						continue;
-					cout << "Error: select failed\n";
-					break;
-				case 0:
-					cout << "Error: select timeout\n";
-					break;
-			}
-			#endif
-			if (readFrame(&b) == EAGAIN)
-				break;
-		} else if (method == METHOD_MMAP) {
-			if (readFrameMmap(&b))
-				break;
-		}
-	}
-	#endif
 	return VideoBuffer(this, b.start, b.length);
 }
 

@@ -28,6 +28,7 @@ class VideoBoard {
 	static const unsigned int METHOD_MMAP;
 	static const unsigned int METHOD_READ;
 	VideoBoard(const char * device, int width, int height);
+	~VideoBoard();
 	int getWidth();
 	int getHeight();
 	bool initialize(unsigned int method);
