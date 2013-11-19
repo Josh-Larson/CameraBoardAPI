@@ -11,7 +11,6 @@ RaspiCam::~RaspiCam(){
 int RaspiCam::initialize() {
     return _impl->initialize();
 }
-
 int RaspiCam::startCapture(ImageTakenCallback userCallback, unsigned char * preallocated_data, unsigned int offset, unsigned int length) {
     return _impl->startCapture(userCallback, preallocated_data,offset,length);
 }

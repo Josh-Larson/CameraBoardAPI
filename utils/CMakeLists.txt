@@ -1,4 +1,5 @@
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 LINK_LIBRARIES(${PROJECT_NAME} ${REQUIRED_LIBRARIES})
-ADD_EXECUTABLE(camera_test raspicam_test.cpp )
- 
+ADD_EXECUTABLE(camera_test raspicam_test.cpp)
+ADD_EXECUTABLE(video_test raspivid_test.cpp)
+
