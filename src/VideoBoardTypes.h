@@ -7,7 +7,6 @@
 #include <iostream>
 #include <vector>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <pthread.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -27,11 +26,5 @@ using namespace cv;
 struct Buffer {
 	unsigned char * start;
 	unsigned int length;
-};
-
-struct ImageContainer {
-	const char * name;
-	Mat image;
-	pthread_mutex_t * mtx;
 };
 #endif // VideoBoardTypes_H

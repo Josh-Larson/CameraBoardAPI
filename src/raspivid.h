@@ -13,17 +13,32 @@ public:
 	RaspiVid(const char * device, int width, int height);
 	~RaspiVid();
 	
-	
+	/** @return the width of the frame */
 	int getWidth();
+	
+	/** @return the height of the frame */
 	int getHeight();
+	
+	/** Initializes the camera with the specified method
+	 * @param method the method to use for capturing, either METHOD_MMAP or METHOD_READ
+	 */
 	bool initialize(unsigned int method);
+	
+	/** Closes any resources allocated on initialize */
 	void destroy();
+	
+	/** Begin capturing to be able to grab a frame */
 	void startCapturing();
+	
+	/** Grab a frame from the camera
+	 * @return a video buffer that contains the data from the image */
 	VideoBuffer grabFrame();
+	
+	/** Releases a frame so that resources are freed. Done automatically by VideoBuffer. */
 	void releaseFrame(VideoBuffer * buffer);
+	
+	/** Sets the brightness of the camera
+	 * @param brightness the brightness to set from 0 to 100 inclusive */
 	void setBrightness(int brightness);
-	void setImage(const char * name, Mat image);
-	Mat grabImage(const char * name);
-	void releaseImage(const char * name);
 };
 #endif // _RaspiVideo_H

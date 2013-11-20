@@ -87,63 +87,66 @@ bool VideoBoard::initializeDevice() {
 	struct v4l2_crop crop;
 	struct v4l2_format fmt;
 	
+	CLEAR (cropcap);
+	cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	crop.c = cropcap.defrect; /* reset to default */
+	
+	CLEAR (fmt);
+	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	fmt.fmt.pix.width = width; 
+	fmt.fmt.pix.height = height;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
+	fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
+	
 	if (xioctl(fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (EINVAL == errno) {
 			cout << "Error: " << device << " is not a V4L2 device!\n";
 		} else {
 			cout << "Error: VIDIOC_QUERYCAP\n";
 		}
-	}
-	
-	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+	} else if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 		cout << "Error: " << device << " does not support video capture\n";
-	}
-	
-	if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
+	} else if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
 		cout << "Error: " << device << " does not support read i/o\n";
-	}
-	
-	/* Select video input, video standard and tune here. */
-	
-	CLEAR (cropcap);
-	
-	cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	
-	if (xioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0) {
-		crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		crop.c = cropcap.defrect; /* reset to default */
-	
-		if (-1 == xioctl (fd, VIDIOC_S_CROP, &crop)) {
-			switch (errno) {
-			case EINVAL:
-				/* Cropping not supported. */
-				break;
-			default:
-				/* Errors ignored. */
-				break;
-			}
-		}
-	} else {	
-		/* Errors ignored. */
-	}
-	
-	CLEAR (fmt);
-	
-	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width = width; 
-	fmt.fmt.pix.height = height;
-	
-	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
-	
-	fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
-	
-	if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1)
+	} else if (xioctl(fd, VIDIOC_CROPCAP, &cropcap) && false) { // Errors ignored
+		
+	} else if (xioctl (fd, VIDIOC_S_CROP, &crop) == -1 && errno != EINVAL) {
+		cout << "Error: Cropping not supported!\n";
+	} else if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1) {
 		cout << "Error: VIDIOC_S_FMT\n";
-	
-	bufferSize = fmt.fmt.pix.sizeimage;
+	} else {
+		bufferSize = fmt.fmt.pix.sizeimage;
+		return true;
+	}
+	return false;
 }
 
-void VideoBoard::initMmap() {
+bool VideoBoard::createBuffers(unsigned int count) {
+	for (unsigned int i = 0; i < count; i++) {
+		struct v4l2_buffer buf;
+		CLEAR(buf);
+		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf.memory      = V4L2_MEMORY_MMAP;
+		buf.index       = i;
+		
+		if (xioctl(fd, VIDIOC_QUERYBUF, &buf) == -1) {
+			cout << "Error: VIDIOC_QUERYBUF\n";
+			return false;
+		}
+		
+		buffers[i].length = buf.length;
+		buffers[i].start = (unsigned char *) mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buf.m.offset);
+		
+		if (buffers[i].start == MAP_FAILED) {
+			cout << "Error: mmap\n";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool VideoBoard::initMmap() {
 	struct v4l2_requestbuffers req;
 	
 	CLEAR(req);
@@ -153,47 +156,21 @@ void VideoBoard::initMmap() {
 	req.memory = V4L2_MEMORY_MMAP;
 	
 	if (xioctl(fd, VIDIOC_REQBUFS, &req) == -1) {
-		if (EINVAL == errno) {
+		if (errno == EINVAL) {
 			cout << "Error: " << device << " does not support memory mapping\n";
-			return;
 		} else {
 			cout << "Error: VIDIOC_REQBUFS\n";
 		}
-	}
-	
-	if (req.count < 2) {
+	} else if (req.count < 2) {
 		cout << "Error: Not enough memory on " << device << " !\n";
-		return;
-	}
-	
-	buffers = new Buffer[req.count];
-	
-	if (!buffers) {
+	} else if (!(buffers = new Buffer[req.count])) {
 		cout << "Error: Out of memory!\n";
+	} else if (!createBuffers(req.count)) {
+		// Error messages handled in createBuffers()
+	} else {
+		return true;
 	}
-	
-	for (unsigned int i = 0; i < req.count; i++) {
-		struct v4l2_buffer buf;
-		
-		CLEAR(buf);
-		
-		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf.memory      = V4L2_MEMORY_MMAP;
-		buf.index       = i;
-		
-		if (xioctl(fd, VIDIOC_QUERYBUF, &buf) == -1) {
-			cout << "Error: VIDIOC_QUERYBUF\n";
-			return;
-		}
-		
-		buffers[i].length = buf.length;
-		buffers[i].start = (unsigned char *) mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buf.m.offset);
-		
-		if (MAP_FAILED == buffers[i].start) {
-			cout << "Error: mmap\n";
-			return;
-		}
-	}
+	return false;
 }
 
 VideoBoard::VideoBoard(const char * device, int width, int height) {
@@ -218,14 +195,20 @@ int VideoBoard::getHeight() {
 
 bool VideoBoard::initialize(unsigned int method) {
 	if (!initialized) {
-		if (!openDevice())
+		if (!openDevice()) {
+			cout << "Unable to open device.\n";
 			return false;
-		if (!initializeDevice())
+		}
+		if (!initializeDevice()) {
+			cout << "Unable to initialize device.\n";
 			return false;
-		if (method == METHOD_MMAP)
-			initMmap();
-		else if (method == METHOD_READ)
+		}
+		if (method == METHOD_MMAP && !initMmap()) {
+			cout << "Unable to initialize mmap.\n";
+			return false;
+		} else if (method == METHOD_READ) {
 			preAllocatedBuffer = new unsigned char[bufferSize];
+		}
 		this->method = method;
 		initialized = true;
 		return true;
@@ -243,10 +226,6 @@ void VideoBoard::destroy() {
 		fd = -1;
 		initialized = false;
 	}
-	for (unsigned int i = 0; i < images.size(); i++) {
-		pthread_mutex_destroy(images[i].mtx);
-	}
-	images.clear();
 }
 
 void VideoBoard::startCapturing() {
@@ -263,19 +242,18 @@ void VideoBoard::startCapturing() {
 		
 			if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
 				cout << "Error: VIDIOC_QBUF\n";
-				return;
+				break;
 			}
 		}
 		type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		if (xioctl(fd, VIDIOC_STREAMON, &type) == -1) {
 			cout << "Error: VIDIOC_STREAMON\n";
-			return;
 		}
 	}
 }
 
 VideoBuffer VideoBoard::grabFrame() {
-	if (!initialized) return VideoBuffer(this, NULL, 0);
+	if (!initialized) { cout << "Uninitialized! You must initialize before calling grabFrame. \n"; return VideoBuffer(this, NULL, 0); }
 	Buffer b;
 	b.start = NULL;
 	b.length = bufferSize;
@@ -318,43 +296,11 @@ void VideoBoard::setBrightness(int brightness) {
 	}
 }
 
-void VideoBoard::setImage(const char * name, Mat image) {
-	for (unsigned int i = 0; i < images.size(); i++) {
-		if (images[i].name == name) {
-			pthread_mutex_lock(images[i].mtx);
-			images[i].image = image;
-			pthread_mutex_unlock(images[i].mtx);
-			return;
-		}
-	}
-	ImageContainer cont;
-	cont.name = name;
-	cont.image = image;
-	pthread_mutex_init(cont.mtx, NULL);
-	images.push_back(cont);
-}
-
-Mat VideoBoard::grabImage(const char * name) {
-	for (unsigned int i = 0; i < images.size(); i++) {
-		if (images[i].name == name) {
-			pthread_mutex_lock(images[i].mtx);
-			return images[i].image;
-		}
-	}
-	return Mat();
-}
-
-void VideoBoard::releaseImage(const char * name) {
-	for (unsigned int i = 0; i < images.size(); i++) {
-		if (images[i].name == name) {
-			pthread_mutex_unlock(images[i].mtx);
-		}
-	}
-}
-
 void VideoBoard::releaseFrame(VideoBuffer * buffer) {
 	if (!initialized) return;
-	if (method == METHOD_MMAP) {
+	if (method == METHOD_READ) {
+		preAllocatedBuffer = buffer->data();
+	} else if (method == METHOD_MMAP) {
 		if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
 			cout << "Error: VIDIOC_QBUF in releaseFrame()\n";
 		}

@@ -14,34 +14,36 @@ class VideoBoard {
 	unsigned int numBuffers;
 	unsigned int bufferSize;
 	unsigned char * preAllocatedBuffer;
-	vector <ImageContainer> images;
 	Buffer * buffers;
 	struct v4l2_buffer buf;
 	
 	int xioctl(int fd, int request, void * arg);
 	int readFrame(Buffer * buffer);
 	int readFrameMmap(Buffer * buffer);
+	//bool readSelect();
+	bool createBuffers(unsigned int count);
 	bool openDevice();
 	bool initializeDevice();
-	void initMmap();
+	bool initMmap();
 	
 	public:
 	static const unsigned int METHOD_MMAP;
 	static const unsigned int METHOD_READ;
+	// Constructor / Destructor
 	VideoBoard(const char * device, int width, int height);
 	~VideoBoard();
+	
+	// Get/Set
 	int getWidth();
 	int getHeight();
+	void setBrightness(int brightness);
+	
+	// Camera functions
 	bool initialize(unsigned int method);
-	void destroy();
 	void startCapturing();
 	VideoBuffer grabFrame();
 	void releaseFrame(VideoBuffer * buffer);
-	void setBrightness(int brightness);
-	void setImage(const char * name, Mat image);
-	Mat grabImage(const char * name);
-	void releaseImage(const char * name);
-	
+	void destroy();
 };
 
 #endif // VIDEOBOARD_H

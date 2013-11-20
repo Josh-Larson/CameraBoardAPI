@@ -36,12 +36,3 @@ void RaspiVid::releaseFrame(VideoBuffer * buffer) {
 void RaspiVid::setBrightness(int brightness) {
 	_impl->setBrightness(brightness);
 }
-void RaspiVid::setImage(const char * name, Mat image) {
-	_impl->setImage(name, image);
-}
-Mat RaspiVid::grabImage(const char * name) {
-	return _impl->grabImage(name);
-}
-void RaspiVid::releaseImage(const char * name) {
-	_impl->releaseImage(name);
-}
