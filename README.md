@@ -1,4 +1,4 @@
-RaspiCam and RaspiVid project</u></b>
+RaspiCam and RaspiVid project
 
 ### How to build:
 Create a new directory for build, then run cmake and make

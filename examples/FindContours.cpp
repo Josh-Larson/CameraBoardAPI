@@ -52,7 +52,7 @@ int main() {
 		
 		// Output information
 		long now = getmsofday();
-		cout << "Frame #" << (i+1) << "\tFrame Time: " << (now - start) << "ms\tEstimated FPS: " << (1000 / (now-start)) << " FPS        \r";
+		cout << "Frame #" << (i+1) << "   Frame Time: " << (now - start) << "ms   Estimated FPS: " << (1000 / (now-start)) << " FPS      \r";
 		cout.flush();
 		start = now;
 	}
