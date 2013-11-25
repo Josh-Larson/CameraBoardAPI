@@ -52,10 +52,12 @@ int VideoBoard::readFrameMmap(Buffer * buffer) {
 		}
 	}
 	
-	assert(buf.index < numBuffers);
+	if (buf.index >= numBuffers)
+		return ERANGE;
 	
 	buffer->start = buffers[buf.index].start;
 	buffer->length = buf.bytesused;
+	
 	return 0;
 }
 
@@ -178,6 +180,7 @@ VideoBoard::VideoBoard(const char * device, int width, int height) {
 	this->width       = width;
 	this->height      = height;
 	this->initialized = false;
+	this->numBuffers  = 3;
 	this->fd          = -1;
 }
 
@@ -257,11 +260,15 @@ VideoBuffer VideoBoard::grabFrame() {
 	Buffer b;
 	b.start = NULL;
 	b.length = bufferSize;
+	int error = 0;
 	if (method == METHOD_READ) {
 		b.start = preAllocatedBuffer;
-		readFrame(&b);
+		error = readFrame(&b);
 	} else if (method == METHOD_MMAP) {
-		readFrameMmap(&b);
+		error = readFrameMmap(&b);
+	}
+	if (error != 0) {
+		cout << "Error: Grab frame failed with errorno #" << error << "\n";
 	}
 	return VideoBuffer(this, b.start, b.length);
 }

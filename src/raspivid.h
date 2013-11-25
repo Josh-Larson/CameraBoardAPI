@@ -1,7 +1,8 @@
 #ifndef _RaspiVideo_H
 #define _RaspiVideo_H
 
-#include "VideoBoardTypes.h"
+#include "VideoBuffer.h"
+
 class VideoBoard;
 class RaspiVid{
 	//the implementation of the camera

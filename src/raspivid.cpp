@@ -1,5 +1,6 @@
 #include "VideoBoard.h"
 #include "raspivid.h"
+#include "VideoBoardTypes.h"
 
 const unsigned int RaspiVid::METHOD_MMAP = VideoBoard::METHOD_MMAP;
 const unsigned int RaspiVid::METHOD_READ = VideoBoard::METHOD_READ;
