@@ -36,13 +36,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stddef.h>
 #include <assert.h>
+#include <stdint.h>
 
 //#include "vcos.h"
-
-typedef unsigned long uint64_t;
-typedef unsigned int uint32_t;
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
 
 /* C99 64bits integers */
 #ifndef INT64_C
