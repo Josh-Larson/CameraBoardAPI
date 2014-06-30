@@ -82,11 +82,6 @@ CONFIGURE_FILE( "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in" "${CMAKE_
 ADD_CUSTOM_TARGET(uninstall "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
 
 # ----------------------------------------------------------------------------
-# create configuration file from .in file (If you use windows take care with paths)
-# ----------------------------------------------------------------------------
-INSTALL(FILES "${PROJECT_BINARY_DIR}/Find${PROJECT_NAME}.cmake" DESTINATION lib/cmake/ )
-
-# ----------------------------------------------------------------------------
 #   Program Optimization and debug (Extracted from OpenCV)
 # ----------------------------------------------------------------------------
 set(WARNINGS_ARE_ERRORS 		OFF CACHE BOOL "Treat warnings as errors")
